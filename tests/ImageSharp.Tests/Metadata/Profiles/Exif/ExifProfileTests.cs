@@ -19,6 +19,27 @@ namespace SixLabors.ImageSharp.Tests.Metadata.Profiles.Exif
     [Trait("Profile", "Exif")]
     public class ExifProfileTests
     {
+        [Theory]
+        [InlineData(ExifParts.IfdTags)]
+        [InlineData(ExifParts.GpsTags)]
+        [InlineData(ExifParts.None)]
+        public void LazyProfile_SerializationAppliesParts(ExifParts parts)
+        {
+            var original = new ExifProfile();
+            original.SetValue(ExifTag.Copyright, "keep in IFD");
+            original.SetValue(ExifTag.GPSLatitudeRef, "N");
+            byte[] data = original.ToByteArray();
+
+            var lazy = new ExifProfile(data) { Parts = parts };
+            var initialized = new ExifProfile(data) { Parts = parts };
+            Assert.NotEmpty(initialized.Values);
+            Assert.Equal(initialized.ToByteArray(), lazy.ToByteArray());
+
+            var roundTrip = new ExifProfile(lazy.ToByteArray());
+            Assert.Equal(parts == ExifParts.GpsTags, roundTrip.GetValue(ExifTag.GPSLatitudeRef) != null);
+            Assert.Equal(parts == ExifParts.IfdTags, roundTrip.GetValue(ExifTag.Copyright) != null);
+        }
+
         public enum TestImageWriteFormat
         {
             /// <summary>

@@ -1,6 +1,8 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
+using System.Buffers.Binary;
 using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using Xunit;
 
@@ -9,6 +11,25 @@ namespace SixLabors.ImageSharp.Tests.Metadata.Profiles.Icc
     [Trait("Profile", "Icc")]
     public class IccReaderTests
     {
+        [Theory]
+        [InlineData(144U, 7U, false)]
+        [InlineData(196U, 8U, false)]
+        [InlineData(uint.MaxValue, 8U, false)]
+        [InlineData(144U, 56U, true)]
+        [InlineData(192U, 8U, true)]
+        public void ReadTagData_ValidatesCompleteExtent(uint offset, uint size, bool valid)
+        {
+            // Unknown tag payloads are preserved, allowing the extent check itself to be tested.
+            byte[] data = new byte[200];
+            BinaryPrimitives.WriteUInt32BigEndian(data.AsSpan(128), 1);
+            BinaryPrimitives.WriteUInt32BigEndian(data.AsSpan(132), 0x41324230);
+            BinaryPrimitives.WriteUInt32BigEndian(data.AsSpan(136), offset);
+            BinaryPrimitives.WriteUInt32BigEndian(data.AsSpan(140), size);
+
+            IccTagDataEntry[] entries = this.CreateReader().ReadTagData(data);
+            Assert.Equal(valid ? 1 : 0, entries.Length);
+        }
+
         [Fact]
         public void ReadProfile_NoEntries()
         {

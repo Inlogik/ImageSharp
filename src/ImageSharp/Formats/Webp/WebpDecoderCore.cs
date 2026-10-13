@@ -36,7 +36,7 @@ namespace SixLabors.ImageSharp.Formats.Webp
         /// <summary>
         /// The stream to decode from.
         /// </summary>
-        private Stream currentStream;
+        private BufferedReadStream currentStream;
 
         /// <summary>
         /// The webp specific metadata.
@@ -95,6 +95,12 @@ namespace SixLabors.ImageSharp.Formats.Webp
                     if (this.webImageInfo.Features is { Animation: true })
                     {
                         WebpThrowHelper.ThrowNotSupportedException("Animations are not supported");
+                    }
+
+                    // An extended canvas header without a VP8/VP8L chunk is not image data.
+                    if (this.webImageInfo.Vp8BitReader is null && this.webImageInfo.Vp8LBitReader is null)
+                    {
+                        WebpThrowHelper.ThrowInvalidImageContentException("Missing WebP image data.");
                     }
 
                     image = new Image<TPixel>(this.Configuration, (int)this.webImageInfo.Width, (int)this.webImageInfo.Height, this.Metadata);
@@ -552,21 +558,9 @@ namespace SixLabors.ImageSharp.Formats.Webp
         /// </summary>
         private void ReadExifProfile()
         {
-            uint exifChunkSize = this.ReadChunkSize();
-            if (this.IgnoreMetadata)
+            byte[] exifData = this.ReadMetadataChunk(required: false);
+            if (exifData != null)
             {
-                this.currentStream.Skip((int)exifChunkSize);
-            }
-            else
-            {
-                byte[] exifData = new byte[exifChunkSize];
-                int bytesRead = this.currentStream.Read(exifData, 0, (int)exifChunkSize);
-                if (bytesRead != exifChunkSize)
-                {
-                    // Ignore invalid chunk.
-                    return;
-                }
-
                 var profile = new ExifProfile(exifData);
                 this.Metadata.ExifProfile = profile;
             }
@@ -577,21 +571,9 @@ namespace SixLabors.ImageSharp.Formats.Webp
         /// </summary>
         private void ReadXmpProfile()
         {
-            uint xmpChunkSize = this.ReadChunkSize();
-            if (this.IgnoreMetadata)
+            byte[] xmpData = this.ReadMetadataChunk(required: false);
+            if (xmpData != null)
             {
-                this.currentStream.Skip((int)xmpChunkSize);
-            }
-            else
-            {
-                byte[] xmpData = new byte[xmpChunkSize];
-                int bytesRead = this.currentStream.Read(xmpData, 0, (int)xmpChunkSize);
-                if (bytesRead != xmpChunkSize)
-                {
-                    // Ignore invalid chunk.
-                    return;
-                }
-
                 var profile = new XmpProfile(xmpData);
                 this.Metadata.XmpProfile = profile;
             }
@@ -602,20 +584,9 @@ namespace SixLabors.ImageSharp.Formats.Webp
         /// </summary>
         private void ReadIccProfile()
         {
-            uint iccpChunkSize = this.ReadChunkSize();
-            if (this.IgnoreMetadata)
+            byte[] iccpData = this.ReadMetadataChunk(required: true);
+            if (iccpData != null)
             {
-                this.currentStream.Skip((int)iccpChunkSize);
-            }
-            else
-            {
-                byte[] iccpData = new byte[iccpChunkSize];
-                int bytesRead = this.currentStream.Read(iccpData, 0, (int)iccpChunkSize);
-                if (bytesRead != iccpChunkSize)
-                {
-                    WebpThrowHelper.ThrowInvalidImageContentException("Not enough data to read the iccp chunk");
-                }
-
                 var profile = new IccProfile(iccpData);
                 if (profile.CheckIsValid())
                 {
@@ -648,13 +619,72 @@ namespace SixLabors.ImageSharp.Formats.Webp
         /// <returns>The chunk size in bytes.</returns>
         private uint ReadChunkSize()
         {
+            ulong chunkSize = this.ReadPaddedChunkSize();
+            if (chunkSize > uint.MaxValue)
+            {
+                WebpThrowHelper.ThrowInvalidImageContentException("WebP chunk size exceeds the supported maximum.");
+            }
+
+            return (uint)chunkSize;
+        }
+
+        /// <summary>
+        /// Reads the complete padded chunk extent without overflowing a 32-bit payload size.
+        /// </summary>
+        /// <returns>The padded length in bytes.</returns>
+        private ulong ReadPaddedChunkSize()
+        {
             if (this.currentStream.Read(this.buffer, 0, 4) == 4)
             {
                 uint chunkSize = BinaryPrimitives.ReadUInt32LittleEndian(this.buffer);
-                return (chunkSize % 2 == 0) ? chunkSize : chunkSize + 1;
+                return (ulong)chunkSize + (chunkSize & 1);
             }
 
             throw new ImageFormatException("Invalid Webp data.");
+        }
+
+        /// <summary>
+        /// Reads a bounded metadata chunk, preserving recovery for optional EXIF and XMP data.
+        /// </summary>
+        /// <param name="required">Whether valid framing is required even when metadata is ignored.</param>
+        /// <returns>The payload, or null when skipped or an optional payload is truncated.</returns>
+        private byte[] ReadMetadataChunk(bool required)
+        {
+            ulong length = this.ReadPaddedChunkSize();
+            ulong remaining = (ulong)this.currentStream.RemainingBytes;
+            long chunkEnd = this.currentStream.Position + (long)Math.Min(length, remaining);
+
+            // ICC precedes image data, so its framing must be valid even when ignored.
+            // Optional truncated chunks consume EOF instead of reinterpreting their payload as a header.
+            if (length > remaining || (!this.IgnoreMetadata && length > int.MaxValue))
+            {
+                this.currentStream.Position = chunkEnd;
+                if (required)
+                {
+                    WebpThrowHelper.ThrowInvalidImageContentException("Not enough data to read the metadata chunk.");
+                }
+
+                return null;
+            }
+
+            if (this.IgnoreMetadata)
+            {
+                this.currentStream.Position = chunkEnd;
+                return null;
+            }
+
+            byte[] data = new byte[(int)length];
+            if (this.currentStream.Read(data, 0, data.Length) != data.Length)
+            {
+                if (required)
+                {
+                    WebpThrowHelper.ThrowInvalidImageContentException("Not enough data to read the metadata chunk.");
+                }
+
+                return null;
+            }
+
+            return data;
         }
 
         /// <summary>

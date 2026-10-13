@@ -15,6 +15,59 @@ namespace SixLabors.ImageSharp.Tests.Formats.Png
     [Trait("Format", "Png")]
     public partial class PngDecoderTests
     {
+        [Fact]
+        public void CorruptCompressedText_IsIgnoredWithoutLosingImageData()
+        {
+            // A valid zlib header followed by the reserved DEFLATE block type.
+            byte[] payload = { 107, 0, 0, 0x78, 0x9C, 0x07, 0, 0, 0, 0 };
+            byte[] type = Encoding.ASCII.GetBytes("zTXt");
+            byte[] crcData = new byte[type.Length + payload.Length];
+            type.CopyTo(crcData, 0);
+            payload.CopyTo(crcData, type.Length);
+            using var stream = new MemoryStream();
+            stream.Write(Raw1X1PngIhdrAndpHYs, 0, Raw1X1PngIhdrAndpHYs.Length);
+            byte[] length = new byte[4];
+            BinaryPrimitives.WriteInt32BigEndian(length, payload.Length);
+            stream.Write(length, 0, 4);
+            stream.Write(crcData, 0, crcData.Length);
+            BinaryPrimitives.WriteUInt32BigEndian(length, SixLabors.ImageSharp.Compression.Zlib.Crc32.Calculate(crcData));
+            stream.Write(length, 0, 4);
+            stream.Write(Raw1X1PngIdatAndIend, 0, Raw1X1PngIdatAndIend.Length);
+            byte[] data = stream.ToArray();
+
+            using Image<Rgba32> image = Image.Load<Rgba32>(data);
+            Assert.Empty(image.Metadata.GetPngMetadata().TextData);
+            Assert.Equal(new Size(1, 1), image.Size());
+            Assert.Empty(Image.Identify(data).Metadata.GetPngMetadata().TextData);
+        }
+
+        [Fact]
+        public void DuplicateHeader_IsRejectedByDecodeAndIdentify()
+        {
+            using var stream = new MemoryStream();
+            stream.Write(Raw1X1PngIhdrAndpHYs, 0, 33);
+            stream.Write(Raw1X1PngIhdrAndpHYs, 8, 25);
+            stream.Write(Raw1X1PngIdatAndIend, 0, Raw1X1PngIdatAndIend.Length);
+            byte[] data = stream.ToArray();
+
+            Assert.Throws<InvalidImageContentException>(() => Image.Load(data));
+            Assert.Throws<InvalidImageContentException>(() => Image.Identify(data));
+        }
+
+        [Theory]
+        [InlineData(536870912, 8, 4)]
+        [InlineData(int.MaxValue, 16, 8)]
+        [InlineData(int.MaxValue, 8, 1)]
+        public void ScanlineLength_ExceedingSupportedLength_Throws(int width, int bitDepth, int bytesPerPixel)
+            => Assert.Throws<InvalidImageContentException>(() => PngDecoderCore.CalculateScanlineLength(width, bitDepth, bytesPerPixel));
+
+        [Theory]
+        [InlineData(536870912, 8, 1, 536870912)]
+        [InlineData(9, 1, 1, 2)]
+        [InlineData(3, 16, 8, 24)]
+        public void ScanlineLength_UsesWideArithmetic(int width, int bitDepth, int bytesPerPixel, int expected)
+            => Assert.Equal(expected, PngDecoderCore.CalculateScanlineLength(width, bitDepth, bytesPerPixel));
+
         // Represents ASCII string of "123456789"
         private readonly byte[] check = { 49, 50, 51, 52, 53, 54, 55, 56, 57 };
 

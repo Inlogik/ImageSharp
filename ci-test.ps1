@@ -11,27 +11,24 @@ param(
   [string]$codecovProfile = 'Release'
 )
 
-$netFxRegex = '^net\d+'
+$netFxRegex = '^net\d+$'
 
 if ($codecov -eq 'true') {
 
   # Allow toggling of profile to workaround any potential JIT errors caused by code injection.
   dotnet clean -c $codecovProfile
+  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   dotnet test --collect "XPlat Code Coverage" --settings .\tests\coverlet.runsettings -c $codecovProfile -f $targetFramework /p:CodeCov=true
 }
 elseif ($platform -eq '-x86' -and $targetFramework -match $netFxRegex) {
 
-  # xunit doesn't run on core with NET SDK 3.1+.
-  # xunit doesn't actually understand -x64 as an option.
-  #
-  # xunit requires explicit path.
-  Set-Location $env:XUNIT_PATH
-
-  dotnet xunit --no-build -c Release -f $targetFramework ${fxVersion} $platform
-
-  Set-Location $PSScriptRoot
+  # Run the existing AnyCPU assembly in an x86 VSTest host. The legacy dotnet-xunit
+  # CLI requires .NET Core 2.0 and cannot run with the SDKs installed by CI.
+  dotnet test --no-build -c Release -f $targetFramework -- RunConfiguration.TargetPlatform=x86
 }
 else {
 
   dotnet test --no-build -c Release -f $targetFramework
 }
+
+exit $LASTEXITCODE

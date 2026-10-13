@@ -476,7 +476,7 @@ namespace SixLabors.ImageSharp.Formats.Png
                 metadata);
 
             this.bytesPerPixel = this.CalculateBytesPerPixel();
-            this.bytesPerScanline = this.CalculateScanlineLength(this.header.Width) + 1;
+            this.bytesPerScanline = CalculateScanlineLength(this.header.Width, this.header.BitDepth, this.bytesPerPixel) + 1;
             this.bytesPerSample = 1;
             if (this.header.BitDepth >= 8)
             {
@@ -542,21 +542,33 @@ namespace SixLabors.ImageSharp.Formats.Png
         /// Calculates the scanline length.
         /// </summary>
         /// <param name="width">The width of the row.</param>
+        /// <param name="bitDepth">The number of bits per sample.</param>
+        /// <param name="bytesPerPixel">The number of bytes per pixel.</param>
         /// <returns>
         /// The <see cref="int"/> representing the length.
         /// </returns>
-        private int CalculateScanlineLength(int width)
+        internal static int CalculateScanlineLength(int width, int bitDepth, int bytesPerPixel)
         {
-            int mod = this.header.BitDepth == 16 ? 16 : 8;
-            int scanlineLength = width * this.header.BitDepth * this.bytesPerPixel;
+            int mod = bitDepth == 16 ? 16 : 8;
 
-            int amount = scanlineLength % mod;
+            // Multiplication must not wrap before narrowing to the allocator's supported length.
+            long scanlineLength = (long)width * bitDepth * bytesPerPixel;
+
+            long amount = scanlineLength % mod;
             if (amount != 0)
             {
                 scanlineLength += mod - amount;
             }
 
-            return scanlineLength / mod;
+            scanlineLength /= mod;
+
+            // Leave room for the filter byte added by both scanline callers.
+            if (scanlineLength >= int.MaxValue)
+            {
+                throw new InvalidImageContentException("PNG scanline length exceeds the supported maximum.");
+            }
+
+            return (int)scanlineLength;
         }
 
         /// <summary>
@@ -675,7 +687,7 @@ namespace SixLabors.ImageSharp.Formats.Png
                     continue;
                 }
 
-                int bytesPerInterlaceScanline = this.CalculateScanlineLength(numColumns) + 1;
+                int bytesPerInterlaceScanline = CalculateScanlineLength(numColumns, this.header.BitDepth, this.bytesPerPixel) + 1;
 
                 while (this.currentRow < this.header.Height)
                 {
@@ -993,6 +1005,13 @@ namespace SixLabors.ImageSharp.Formats.Png
         /// <param name="data">The <see cref="T:ReadOnlySpan{byte}"/> containing data.</param>
         private void ReadHeaderChunk(PngMetadata pngMetadata, ReadOnlySpan<byte> data)
         {
+            // Decode and Identify share this validation; an IHDR cannot replace an
+            // already established layout after buffers have been sized from it.
+            if (!Equals(this.header, default(PngHeader)))
+            {
+                throw new InvalidImageContentException("Duplicate PNG header.");
+            }
+
             this.header = PngHeader.Parse(data);
 
             this.header.Validate();
@@ -1353,11 +1372,21 @@ namespace SixLabors.ImageSharp.Formats.Png
                 var uncompressedBytes = new List<byte>();
 
                 // Note: this uses a buffer which is only 4 bytes long to read the stream, maybe allocating a larger buffer makes sense here.
-                int bytesRead = inflateStream.CompressedStream.Read(this.buffer, 0, this.buffer.Length);
-                while (bytesRead != 0)
+                try
                 {
-                    uncompressedBytes.AddRange(this.buffer.AsSpan(0, bytesRead).ToArray());
-                    bytesRead = inflateStream.CompressedStream.Read(this.buffer, 0, this.buffer.Length);
+                    int bytesRead = inflateStream.CompressedStream.Read(this.buffer, 0, this.buffer.Length);
+                    while (bytesRead != 0)
+                    {
+                        uncompressedBytes.AddRange(this.buffer.AsSpan(0, bytesRead).ToArray());
+                        bytesRead = inflateStream.CompressedStream.Read(this.buffer, 0, this.buffer.Length);
+                    }
+                }
+                catch (InvalidDataException)
+                {
+                    // The ancillary chunk is already buffered, so discarding corrupt text
+                    // preserves the next chunk boundary and the existing metadata recovery policy.
+                    value = null;
+                    return false;
                 }
 
                 value = encoding.GetString(uncompressedBytes.ToArray());

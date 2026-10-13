@@ -1,4 +1,4 @@
-﻿// Copyright (c) Six Labors.
+// Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
 using System;
@@ -138,7 +138,9 @@ namespace SixLabors.ImageSharp.Metadata.Profiles.Icc
                 uint tagSize = reader.ReadUInt32();
 
                 // Exclude entries that have nonsense values and could cause exceptions further on
-                if (tagOffset < reader.DataLength && tagSize < reader.DataLength - 128)
+                // Every tag needs its eight-byte type header and a complete payload.
+                // Subtract only after checking the offset to avoid unsigned underflow.
+                if (tagSize >= 8 && tagOffset <= reader.DataLength && tagSize <= reader.DataLength - tagOffset)
                 {
                     table.Add(new IccTagTableEntry((IccProfileTag)tagSignature, tagOffset, tagSize));
                 }

@@ -202,14 +202,21 @@ namespace SixLabors.ImageSharp.Metadata.Profiles.Exif
             => this.SetValueInternal(tag, value);
 
         /// <summary>
-        /// Converts this instance to a byte array.
+        /// Converts the sections selected by <see cref="Parts"/> to a byte array.
         /// </summary>
         /// <returns>The <see cref="T:byte[]"/></returns>
         public byte[] ToByteArray()
         {
             if (this.values is null)
             {
-                return this.data;
+                // Original bytes include all sections. Lazy profiles must be parsed
+                // before serialization when filtering is requested, including GPS removal.
+                if (this.Parts == ExifParts.All)
+                {
+                    return this.data;
+                }
+
+                this.InitializeValues();
             }
 
             if (this.values.Count == 0)

@@ -280,6 +280,15 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jpg
         public void DecodeHang<TPixel>(TestImageProvider<TPixel> provider)
         where TPixel : unmanaged, IPixel<TPixel>
         {
+            if (!TestEnvironment.Is64BitProcess)
+            {
+                // This fixture requires more than 4 GB of pixel storage. On x86,
+                // the allocator must reject it rather than enter the problematic scan.
+                InvalidImageContentException exception = Assert.Throws<InvalidImageContentException>(() => provider.GetImage(JpegDecoder));
+                Assert.IsType<InvalidMemoryOperationException>(exception.InnerException);
+                return;
+            }
+
             if (TestEnvironment.IsWindows &&
                 TestEnvironment.RunsOnCI)
             {
