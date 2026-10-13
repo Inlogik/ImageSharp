@@ -9,7 +9,7 @@ using BenchmarkDotNet.Attributes;
 
 namespace SixLabors.ImageSharp.Benchmarks.ColorSpaces.Bulk
 {
-    [Config(typeof(Config.ShortCore31))]
+    [Config(typeof(Config.ShortCore80))]
     public class PremultiplyVector4
     {
         private static readonly Vector4[] Vectors = CreateVectors();

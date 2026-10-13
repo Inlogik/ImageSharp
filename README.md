@@ -63,14 +63,14 @@ Install stable releases via Nuget; development releases are available via MyGet.
 
 If you prefer, you can compile ImageSharp yourself (please do and help!)
 
-- Using [Visual Studio 2019](https://visualstudio.microsoft.com/vs/)
+- Using [Visual Studio 2022](https://visualstudio.microsoft.com/vs/)
   - Make sure you have the latest version installed
-  - Make sure you have [the .NET 5 SDK](https://www.microsoft.com/net/core#windows) installed
+  - Make sure you have [the .NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) installed
 
 Alternatively, you can work from command line and/or with a lightweight editor on **both Linux/Unix and Windows**:
 
 - [Visual Studio Code](https://code.visualstudio.com/) with [C# Extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode.csharp)
-- [.NET Core](https://www.microsoft.com/net/core#linuxubuntu)
+- [.NET SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
 
 To clone ImageSharp locally, click the "Clone in [YOUR_OS]" button above or run the following git commands:
 
@@ -103,7 +103,4 @@ Please... Spread the word, contribute algorithms, submit performance improvement
 - [Anton Firsov](https://github.com/antonfirsov)
 - [Scott Williams](https://github.com/tocsoft)
 - [Brian Popow](https://github.com/brianpopow)
-
-
-
 

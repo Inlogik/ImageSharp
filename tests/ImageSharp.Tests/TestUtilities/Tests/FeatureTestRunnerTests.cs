@@ -19,7 +19,11 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests
             new TheoryData<HwIntrinsics, string[]>
             {
                 { HwIntrinsics.DisableAES | HwIntrinsics.AllowAll, new string[] { "EnableAES", "AllowAll" } },
+#if NET8_0_OR_GREATER
+                { HwIntrinsics.DisableSIMD | HwIntrinsics.DisableHWIntrinsic, new string[] { "EnableHWIntrinsic", "EnableHWIntrinsic" } },
+#else
                 { HwIntrinsics.DisableSIMD | HwIntrinsics.DisableHWIntrinsic, new string[] { "FeatureSIMD", "EnableHWIntrinsic" } },
+#endif
                 { HwIntrinsics.DisableSSE42 | HwIntrinsics.DisableAVX, new string[] { "EnableSSE42", "EnableAVX" } }
             };
 

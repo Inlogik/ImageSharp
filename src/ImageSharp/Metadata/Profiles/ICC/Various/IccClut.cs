@@ -1,4 +1,4 @@
-﻿// Copyright (c) Six Labors.
+// Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
 using System;
@@ -173,13 +173,14 @@ namespace SixLabors.ImageSharp.Metadata.Profiles.Icc
             bool isLengthDifferent = this.Values.Any(t => t.Length != this.OutputChannelCount);
             Guard.IsFalse(isLengthDifferent, nameof(this.Values), "The number of output values varies");
 
-            int length = 0;
+            // CLUT entries form the Cartesian product of the per-channel grids.
+            long length = 1;
             for (int i = 0; i < this.InputChannelCount; i++)
             {
-                length += (int)Math.Pow(this.GridPointCount[i], this.InputChannelCount);
+                int gridPoints = this.GridPointCount[i];
+                Guard.IsTrue(gridPoints > 0 && length <= int.MaxValue / gridPoints, nameof(this.GridPointCount), "Invalid grid dimensions");
+                length *= gridPoints;
             }
-
-            length /= this.InputChannelCount;
 
             Guard.IsTrue(this.Values.Length == length, nameof(this.Values), "Length of values array does not match the grid points");
         }

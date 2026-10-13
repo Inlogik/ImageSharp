@@ -128,6 +128,15 @@ namespace SixLabors.ImageSharp.Formats.Tiff.Compression.Compressors
             }
         }
 
+        /// <inheritdoc />
+        protected override long GetMaximumEncodedBits(int rowsPerStrip)
+        {
+            // A pixel can require a 13-bit terminating code. Each row can also require
+            // an 8-bit zero-length white run and a 12-bit EOL, plus the initial EOL.
+            // This also covers modified Huffman's smaller byte-padding overhead.
+            return checked(12L + ((((long)this.Width * 13) + 20) * rowsPerStrip));
+        }
+
         private void WriteEndOfLine(Span<byte> compressedData)
         {
             if (this.useModifiedHuffman)

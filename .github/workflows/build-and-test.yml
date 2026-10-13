@@ -17,49 +17,15 @@ jobs:
       matrix:
         options:
           - os: ubuntu-latest
-            framework: net6.0
-            sdk: 6.0.x
-            sdk-preview: true
+            framework: net8.0
             runtime: -x64
             codecov: false
           - os: macos-26-intel
-            framework: net6.0
-            sdk: 6.0.x
-            sdk-preview: true
+            framework: net8.0
             runtime: -x64
             codecov: false
           - os: windows-latest
-            framework: net6.0
-            sdk: 6.0.x
-            sdk-preview: true
-            runtime: -x64
-            codecov: false
-          - os: ubuntu-latest
-            framework: net5.0
-            runtime: -x64
-            codecov: false
-          - os: macos-26-intel
-            framework: net5.0
-            runtime: -x64
-            codecov: false
-          - os: windows-latest
-            framework: net5.0
-            runtime: -x64
-            codecov: false
-          - os: ubuntu-latest
-            framework: netcoreapp3.1
-            runtime: -x64
-            codecov: false
-          - os: macos-26-intel
-            framework: netcoreapp3.1
-            runtime: -x64
-            codecov: false
-          - os: windows-latest
-            framework: netcoreapp3.1
-            runtime: -x64
-            codecov: false
-          - os: windows-latest
-            framework: netcoreapp2.1
+            framework: net8.0
             runtime: -x64
             codecov: false
           - os: windows-latest
@@ -126,10 +92,7 @@ jobs:
         uses: actions/setup-dotnet@v1
         with:
           dotnet-version: |
-            6.0.x
-            5.0.x
-            3.1.x
-            2.1.x
+            8.0.x
 
       - name: DotNet Build
         if: ${{ matrix.options.sdk-preview != true }}
@@ -214,4 +177,3 @@ jobs:
         run: |
           dotnet nuget push .\artifacts\*.nupkg -k ${{secrets.NUGET_TOKEN}} -s https://api.nuget.org/v3/index.json --skip-duplicate
           dotnet nuget push .\artifacts\*.snupkg -k ${{secrets.NUGET_TOKEN}} -s https://api.nuget.org/v3/index.json --skip-duplicate
-

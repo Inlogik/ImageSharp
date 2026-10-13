@@ -18,8 +18,8 @@
 
   <ItemGroup>
     <!-- Test Dependencies -->
-    <PackageReference Update="BenchmarkDotNet" Version="0.13.0" />
-    <PackageReference Update="BenchmarkDotNet.Diagnostics.Windows" Version="0.13.0" Condition="'$(IsWindows)'=='true'" />
+    <PackageReference Update="BenchmarkDotNet" Version="0.13.12" />
+    <PackageReference Update="BenchmarkDotNet.Diagnostics.Windows" Version="0.13.12" Condition="'$(IsWindows)'=='true'" />
     <PackageReference Update="Colourful" Version="3.0.0" />
     <PackageReference Update="Magick.NET-Q16-AnyCPU" Version="11.1.2" />
     <PackageReference Update="Microsoft.DotNet.RemoteExecutor" Version="6.0.0-beta.21311.3" />

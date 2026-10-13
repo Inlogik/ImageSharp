@@ -45,6 +45,13 @@ namespace SixLabors.ImageSharp.Metadata.Profiles.Icc
         /// <returns>The read CLUT</returns>
         public IccClut ReadClut(int inChannelCount, int outChannelCount, bool isFloat)
         {
+            // The descriptor has only 16 grid dimensions. Validate before allocating or copying.
+            if (inChannelCount < 1 || inChannelCount > 15 || outChannelCount < 1 || outChannelCount > 15
+                || this.data.Length - this.currentIndex < 16)
+            {
+                throw new InvalidIccProfileException("Invalid CLUT dimensions or truncated grid descriptor.");
+            }
+
             // Grid-points are always 16 bytes long but only 0-inChCount are used
             var gridPointCount = new byte[inChannelCount];
             Buffer.BlockCopy(this.data, this.AddIndex(16), gridPointCount, 0, inChannelCount);
@@ -78,13 +85,7 @@ namespace SixLabors.ImageSharp.Metadata.Profiles.Icc
         public IccClut ReadClut8(int inChannelCount, int outChannelCount, byte[] gridPointCount)
         {
             int start = this.currentIndex;
-            int length = 0;
-            for (int i = 0; i < inChannelCount; i++)
-            {
-                length += (int)Math.Pow(gridPointCount[i], inChannelCount);
-            }
-
-            length /= inChannelCount;
+            int length = this.GetClutLength(inChannelCount, outChannelCount, gridPointCount, 1);
 
             const float Max = byte.MaxValue;
 
@@ -112,13 +113,7 @@ namespace SixLabors.ImageSharp.Metadata.Profiles.Icc
         public IccClut ReadClut16(int inChannelCount, int outChannelCount, byte[] gridPointCount)
         {
             int start = this.currentIndex;
-            int length = 0;
-            for (int i = 0; i < inChannelCount; i++)
-            {
-                length += (int)Math.Pow(gridPointCount[i], inChannelCount);
-            }
-
-            length /= inChannelCount;
+            int length = this.GetClutLength(inChannelCount, outChannelCount, gridPointCount, 2);
 
             const float Max = ushort.MaxValue;
 
@@ -146,13 +141,7 @@ namespace SixLabors.ImageSharp.Metadata.Profiles.Icc
         public IccClut ReadClutF32(int inChCount, int outChCount, byte[] gridPointCount)
         {
             int start = this.currentIndex;
-            int length = 0;
-            for (int i = 0; i < inChCount; i++)
-            {
-                length += (int)Math.Pow(gridPointCount[i], inChCount);
-            }
-
-            length /= inChCount;
+            int length = this.GetClutLength(inChCount, outChCount, gridPointCount, 4);
 
             var values = new float[length][];
             for (int i = 0; i < length; i++)
@@ -166,6 +155,46 @@ namespace SixLabors.ImageSharp.Metadata.Profiles.Icc
 
             this.currentIndex = start + (length * outChCount * 4);
             return new IccClut(values, gridPointCount, IccClutDataType.Float);
+        }
+
+        /// <summary>
+        /// Validates CLUT dimensions and available storage before allocating the value arrays.
+        /// </summary>
+        /// <param name="inputChannelCount">The number of input channels.</param>
+        /// <param name="outputChannelCount">The number of output channels.</param>
+        /// <param name="gridPointCount">The grid size for each input channel.</param>
+        /// <param name="bytesPerValue">The encoded size of each output value.</param>
+        /// <returns>The number of grid points.</returns>
+        private int GetClutLength(int inputChannelCount, int outputChannelCount, byte[] gridPointCount, int bytesPerValue)
+        {
+            if (inputChannelCount < 1 || inputChannelCount > 15 || outputChannelCount < 1 || outputChannelCount > 15
+                || gridPointCount.Length != inputChannelCount)
+            {
+                throw new InvalidIccProfileException("Invalid CLUT channel count.");
+            }
+
+            // The table is a Cartesian product, including when channel grid sizes differ.
+            int length = 1;
+            for (int i = 0; i < inputChannelCount; i++)
+            {
+                int gridPoints = gridPointCount[i];
+                if (gridPoints == 0 || length > int.MaxValue / gridPoints)
+                {
+                    throw new InvalidIccProfileException("Invalid CLUT dimensions.");
+                }
+
+                length *= gridPoints;
+            }
+
+            // Check encoded storage before allocating even the outer jagged array.
+            long valueCount = (long)length * outputChannelCount;
+            long byteCount = valueCount * bytesPerValue;
+            if (valueCount > int.MaxValue || byteCount > this.data.Length - this.currentIndex)
+            {
+                throw new InvalidIccProfileException("The CLUT data is shorter than its declared dimensions.");
+            }
+
+            return length;
         }
     }
 }

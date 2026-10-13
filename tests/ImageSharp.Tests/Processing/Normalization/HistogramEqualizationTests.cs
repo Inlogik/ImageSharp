@@ -1,6 +1,8 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
+using System.IO;
+using System.Numerics;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using SixLabors.ImageSharp.Processing.Processors.Normalization;
@@ -14,6 +16,66 @@ namespace SixLabors.ImageSharp.Tests.Processing.Normalization
     public class HistogramEqualizationTests
     {
         private static readonly ImageComparer ValidatorComparer = ImageComparer.TolerantPercentage(0.0456F);
+
+        [Theory]
+        [InlineData(float.NaN, 0)]
+        [InlineData(float.NegativeInfinity, 0)]
+        [InlineData(float.PositiveInfinity, 255)]
+        [InlineData(-2F, 0)]
+        [InlineData(2F, 255)]
+        [InlineData(0.5F, 128)]
+        public void HistogramLuminance_ClampsFloatingPointSamples(float sample, int expected)
+        {
+            var vector = new Vector4(sample, sample, sample, 1F);
+            Assert.Equal(expected, ColorNumerics.GetBT709Luminance(ref vector, 256));
+        }
+
+        [Theory]
+        [InlineData(float.PositiveInfinity)]
+        [InlineData(float.NegativeInfinity)]
+        [InlineData(float.NaN)]
+        [InlineData(2F)]
+        [InlineData(-2F)]
+        [InlineData(0.5F)]
+        public void GlobalHistogramEqualization_DecodedFloatingPointSamples(float sample)
+        {
+            using var stream = new MemoryStream();
+            using var writer = new BinaryWriter(stream);
+            writer.Write((ushort)0x4949);
+            writer.Write((ushort)42);
+            writer.Write(8U);
+            writer.Write((ushort)10);
+            WriteEntry(writer, 256, 4, 8);
+            WriteEntry(writer, 257, 4, 1);
+            WriteEntry(writer, 258, 3, 32);
+            WriteEntry(writer, 259, 3, 1);
+            WriteEntry(writer, 262, 3, 1);
+            WriteEntry(writer, 273, 4, 134);
+            WriteEntry(writer, 277, 3, 1);
+            WriteEntry(writer, 278, 4, 1);
+            WriteEntry(writer, 279, 4, 32);
+            WriteEntry(writer, 339, 3, 3);
+            writer.Write(0U);
+            for (int i = 0; i < 8; i++)
+            {
+                writer.Write(sample);
+            }
+
+            using Image<HalfVector4> image = Image.Load<HalfVector4>(stream.ToArray());
+            image.Mutate(x => x.HistogramEqualization());
+            Assert.Equal(new Size(8, 1), image.Size());
+        }
+
+        /// <summary>
+        /// Writes a single inline TIFF directory entry for the floating-point regression fixture.
+        /// </summary>
+        private static void WriteEntry(BinaryWriter writer, ushort tag, ushort type, uint value)
+        {
+            writer.Write(tag);
+            writer.Write(type);
+            writer.Write(1U);
+            writer.Write(value);
+        }
 
         [Theory]
         [InlineData(256)]

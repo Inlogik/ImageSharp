@@ -20,6 +20,25 @@ namespace SixLabors.ImageSharp.Tests.Formats.Tiff
     public class BigTiffDecoderTests : TiffDecoderBaseTester
     {
         [Theory]
+        [InlineData(1UL, 0)]
+        [InlineData(5000000000UL, 0)]
+        [InlineData(ulong.MaxValue, 8)]
+        [InlineData(1UL, 27)]
+        public void TiffDecoder_DirectoryEntryCountExceedsAvailableData_Throws(ulong count, int remainingBytes)
+        {
+            byte[] data = new byte[24 + remainingBytes];
+            data[0] = 0x49;
+            data[1] = 0x49;
+            data[2] = 0x2B;
+            data[4] = 8;
+            data[8] = 16;
+            BitConverter.GetBytes(count).CopyTo(data, 16);
+
+            Assert.Throws<InvalidImageContentException>(() => Image.Load(data));
+            Assert.Throws<InvalidImageContentException>(() => Image.Identify(data));
+        }
+
+        [Theory]
         [WithFile(BigTIFF, PixelTypes.Rgba32)]
         [WithFile(BigTIFFLong, PixelTypes.Rgba32)]
         [WithFile(BigTIFFLong8, PixelTypes.Rgba32)]

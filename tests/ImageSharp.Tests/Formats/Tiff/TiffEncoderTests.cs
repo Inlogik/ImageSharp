@@ -1,6 +1,7 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
 using System.IO;
 using SixLabors.ImageSharp.Formats.Tiff;
 using SixLabors.ImageSharp.Formats.Tiff.Constants;
@@ -14,6 +15,59 @@ namespace SixLabors.ImageSharp.Tests.Formats.Tiff
     [Trait("Format", "Tiff")]
     public class TiffEncoderTests : TiffEncoderBaseTester
     {
+        [Theory]
+        [InlineData(TiffCompression.Ccitt1D, 1, 1)]
+        [InlineData(TiffCompression.Ccitt1D, 1, 2000)]
+        [InlineData(TiffCompression.CcittGroup3Fax, 1, 1)]
+        [InlineData(TiffCompression.CcittGroup3Fax, 1, 2000)]
+        [InlineData(TiffCompression.CcittGroup3Fax, 7, 31)]
+        [InlineData(TiffCompression.CcittGroup4Fax, 1, 1)]
+        [InlineData(TiffCompression.CcittGroup4Fax, 1, 2000)]
+        [InlineData(TiffCompression.CcittGroup4Fax, 7, 31)]
+        [InlineData(TiffCompression.CcittGroup4Fax, 64, 31)]
+        public void TiffEncoder_NarrowCcitt_RoundTrips(TiffCompression compression, int width, int height)
+        {
+            using var image = new Image<L8>(width, height);
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    image[x, y] = new L8((byte)(((x + y) & 1) == 0 ? 255 : 0));
+                }
+            }
+
+            TiffFrameMetadata metadata = image.Frames.RootFrame.Metadata.GetTiffMetadata();
+            metadata.BitsPerPixel = TiffBitsPerPixel.Bit1;
+            metadata.Compression = compression;
+
+            using var output = new MemoryStream();
+            image.Save(output, new TiffEncoder());
+            output.Position = 0;
+            using Image<L8> decoded = Image.Load<L8>(output);
+            Assert.Equal(image.Size(), decoded.Size());
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    Assert.Equal(image[x, y], decoded[x, y]);
+                }
+            }
+        }
+
+        [Fact]
+        public void TiffEncoder_SinglePixelGroup4_DefaultEncoderRoundTrips()
+        {
+            // Valid 1x1 Group 4 input selects compression and bit depth through decoded metadata.
+            byte[] input = Convert.FromBase64String("SUkqAAgAAAAJAAABAwABAAAAAQAAAAEBAwABAAAAAQAAAAIBAwABAAAAAQAAAAMBAwABAAAABAAAAAYBAwABAAAAAAAAABEBBAABAAAAegAAABUBAwABAAAAAQAAABYBBAABAAAAAQAAABcBBAABAAAABAAAAAAAAACACACA");
+            using Image<L8> image = Image.Load<L8>(input);
+            using var output = new MemoryStream();
+            image.Save(output, new TiffEncoder());
+            output.Position = 0;
+            using Image<L8> decoded = Image.Load<L8>(output);
+            Assert.Equal(image.Size(), decoded.Size());
+            Assert.Equal(image[0, 0], decoded[0, 0]);
+        }
+
         [Theory]
         [InlineData(null, TiffBitsPerPixel.Bit24)]
         [InlineData(TiffPhotometricInterpretation.Rgb, TiffBitsPerPixel.Bit24)]

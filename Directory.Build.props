@@ -26,6 +26,11 @@
     <LangVersion>10.0</LangVersion>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net8.0'">
+    <!-- .NET 8 reference assemblies expose ref-readonly parameters requiring C# 12. -->
+    <LangVersion>12.0</LangVersion>
+  </PropertyGroup>
+
   <!--
   Ensure all custom build configurations based upon "Release" are optimized.
   This is easier than setting each project individually.

@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.IO;
-using SixLabors.ImageSharp.Advanced;
 using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.PixelFormats;
 
@@ -144,7 +143,10 @@ namespace SixLabors.ImageSharp.Tests
         /// </returns>
         public Image<Rgba32> CreateRgba32Image(IImageDecoder decoder)
         {
-            return ImageSharp.Image.Load<Rgba32>(this.Image.GetConfiguration(), this.Bytes, decoder);
+            // Reading configuration from the cached Image lazily decodes a second image
+            // whose pixel buffer remains in the static cache. Decode only the requested image,
+            // so allocation diagnostics track buffers owned and disposed by the caller.
+            return ImageSharp.Image.Load<Rgba32>(Configuration.Default, this.Bytes, decoder);
         }
     }
 }

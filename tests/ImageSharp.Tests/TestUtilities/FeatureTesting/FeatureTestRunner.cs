@@ -357,7 +357,14 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities
                 switch (intrinsic)
                 {
                     case nameof(HwIntrinsics.DisableSIMD):
+#if NET8_0_OR_GREATER
+                        // CoreCLR no longer exposes FeatureSIMD. Disabling hardware intrinsics
+                        // also disables System.Numerics vector acceleration on modern runtimes.
+                        features.Add(key, "EnableHWIntrinsic");
+#else
+                        // .NET Framework still uses the legacy SIMD switch.
                         features.Add(key, "FeatureSIMD");
+#endif
                         break;
 
                     case nameof(HwIntrinsics.AllowAll):
